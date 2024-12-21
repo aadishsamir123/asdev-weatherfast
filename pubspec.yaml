@@ -1,0 +1,35 @@
+name: weatherfast
+description: "WeatherFast App"
+
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  dynamic_color: ^1.7.0
+  flutter_typeahead: ^5.2.0
+  geolocator: ^13.0.2
+  permission_handler: ^11.1.0
+  font_awesome_flutter: ^10.0.0
+  cached_network_image: ^3.2.3
+  weather_icons: ^3.0.0
+  rive: ^0.13.20
+  intl: ^0.17.0
+  flutter_custom_tabs: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/backgrounds/
