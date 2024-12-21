@@ -22,7 +22,6 @@ class _WeatherHomeState extends State<WeatherHome> {
   String? _currentLocation;
   Map<String, dynamic>? _weatherData;
   Map<String, dynamic>? _forecastData; // Add this line
-  bool _showHourlyForecast = false; // State to toggle forecast visibility
   String? _localTime; // Add this line
 
   @override
@@ -395,8 +394,6 @@ class _WeatherHomeState extends State<WeatherHome> {
     final weather = _weatherData?['current'];
     final weatherText =
         weather?['condition']['text']; // Weather condition (e.g., fog, rain)
-    final temperature = weather?['temp_c']; // Current temperature
-    final cityName = _currentLocation ?? 'Unknown';
     String action = '';
     switch (weatherText?.toLowerCase()) {
       case 'sunny':
@@ -694,10 +691,6 @@ class _WeatherHomeState extends State<WeatherHome> {
         weather?['condition']['text']; // Weather condition (e.g., fog, rain)
     final temperature = weather?['temp_c']; // Current temperature
     final cityName = _currentLocation ?? 'Unknown';
-
-    // Generate current advice
-    String currentAdvice =
-        _buildAdviceCard().toString(); // Use the existing 'action' variable
 
     // Example FontAwesome icon mapping for weather conditions
     IconData weatherIcon;

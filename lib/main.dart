@@ -3,7 +3,6 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'settings_screen.dart';
 import 'detail_screen.dart';
 import 'weather_home.dart';
-import 'webview_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
