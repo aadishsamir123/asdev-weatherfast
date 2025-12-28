@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 class WeatherService {
   final String _geoUrl = 'https://geocoding-api.open-meteo.com/v1/search';
   final String _weatherUrl = 'https://api.open-meteo.com/v1/forecast';
+  final String _airQualityUrl =
+      'https://air-quality-api.open-meteo.com/v1/air-quality';
 
   /// Fetch current weather and forecast for a location
   /// Returns data compatible with the app's existing UI expectations
@@ -17,6 +19,8 @@ class WeatherService {
 
       // Fetch weather data for those coordinates
       final weatherData = await _fetchWeatherData(coords['lat'], coords['lon']);
+      final airQuality =
+          await _fetchAirQualityData(coords['lat'], coords['lon']);
 
       // Get current time in the location's timezone
       final currentTime = weatherData['current']['time'];
@@ -82,7 +86,7 @@ class WeatherService {
               final aligned = DateTime(
                   current.year, current.month, current.day, current.hour);
               final alignedStr =
-                  aligned.toIso8601String().substring(0, 13) + ':00';
+                  '${aligned.toIso8601String().substring(0, 13)}:00';
 
               // Find exact hour match, else nearest
               int idx = times.indexWhere((t) => t.startsWith(alignedStr));
@@ -110,6 +114,8 @@ class WeatherService {
             // Sensible final fallback
             return 10.0;
           })(),
+          'aqi': airQuality['us_aqi'],
+          'air_quality_text': _getAQIDescription(airQuality['us_aqi']),
         },
       };
     } catch (e) {
@@ -126,6 +132,8 @@ class WeatherService {
       }
 
       final weatherData = await _fetchWeatherData(coords['lat'], coords['lon']);
+      final airQuality =
+          await _fetchAirQualityData(coords['lat'], coords['lon']);
 
       // Transform daily forecast to match expected format
       final List<dynamic> forecastDays = [];
@@ -248,7 +256,7 @@ class WeatherService {
               final aligned = DateTime(
                   current.year, current.month, current.day, current.hour);
               final alignedStr =
-                  aligned.toIso8601String().substring(0, 13) + ':00';
+                  '${aligned.toIso8601String().substring(0, 13)}:00';
 
               int idx = times.indexWhere((t) => t.startsWith(alignedStr));
               if (idx < 0) {
@@ -273,6 +281,8 @@ class WeatherService {
             } catch (_) {}
             return 10.0;
           })(),
+          'aqi': airQuality['us_aqi'],
+          'air_quality_text': _getAQIDescription(airQuality['us_aqi']),
         },
         'forecast': {
           'forecastday': forecastDays,
@@ -341,7 +351,6 @@ class WeatherService {
               }
             } catch (e) {
               // Fallback if reverse geocoding fails
-              print('Reverse geocoding failed: $e');
             }
 
             // Fallback to generic name if reverse geocoding fails
@@ -397,6 +406,44 @@ class WeatherService {
       throw Exception(
           'Failed to fetch weather data: ${response.statusCode} ${response.body}');
     }
+  }
+
+  /// Fetch air quality data from Open-Meteo Air Quality API
+  Future<Map<String, dynamic>> _fetchAirQualityData(
+      double lat, double lon) async {
+    try {
+      final url = Uri.parse('$_airQualityUrl?latitude=$lat&longitude=$lon'
+          '&current=us_aqi,pm10,pm2_5'
+          '&timezone=auto');
+
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final current = data['current'] ?? {};
+        return {
+          'us_aqi': (current['us_aqi'] as num?)?.toInt() ?? 0,
+          'pm10': (current['pm10'] as num?)?.toDouble() ?? 0.0,
+          'pm2_5': (current['pm2_5'] as num?)?.toDouble() ?? 0.0,
+        };
+      } else {
+        // Return default values if AQI fetch fails
+        return {'us_aqi': 0, 'pm10': 0.0, 'pm2_5': 0.0};
+      }
+    } catch (e) {
+      // Return default values on error
+      return {'us_aqi': 0, 'pm10': 0.0, 'pm2_5': 0.0};
+    }
+  }
+
+  /// Get AQI description based on US AQI scale
+  String _getAQIDescription(int aqi) {
+    if (aqi == 0) return 'Unknown';
+    if (aqi <= 50) return 'Good';
+    if (aqi <= 100) return 'Moderate';
+    if (aqi <= 150) return 'Unhealthy for Sensitive';
+    if (aqi <= 200) return 'Unhealthy';
+    if (aqi <= 300) return 'Very Unhealthy';
+    return 'Hazardous';
   }
 
   /// Convert WMO weather code to human-readable description

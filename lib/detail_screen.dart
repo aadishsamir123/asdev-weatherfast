@@ -1,21 +1,45 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:weather_icons/weather_icons.dart';
+
+import 'services/weather_insights_service.dart';
+import 'time_service.dart';
+import 'ui/animated_weather_backdrop.dart';
 import 'weather_service.dart';
 
 class DetailScreen extends StatefulWidget {
   final String? location;
 
-  const DetailScreen({Key? key, required this.location}) : super(key: key);
+  const DetailScreen({super.key, required this.location});
 
   @override
-  _DetailScreenState createState() => _DetailScreenState();
+  State<DetailScreen> createState() => _DetailScreenState();
 }
 
 class _DetailScreenState extends State<DetailScreen>
     with SingleTickerProviderStateMixin {
   final WeatherService _weatherService = WeatherService();
-  Map<String, dynamic>? _weatherData;
+  final TimeService _timeService = TimeService();
+  final WeatherInsightsService _insightsService = WeatherInsightsService();
+
+  bool _isDaytime = true;
+  String _condition = 'Clear';
+  int? _tempC;
+  int? _hiC;
+  int? _loC;
+  String? _locationName;
+  bool _isLoading = true;
+  int? _aqi;
+  String _aqiText = '';
+
+  // Comprehensive insights data
+  List<String> _recommendations = [];
+  String _insightsSummary = '';
+  List<Map<String, String>> _activities = [];
+  List<Map<String, String>> _healthTips = [];
+  Map<String, String> _clothingAdvice = {};
+  List<Map<String, dynamic>> _hourlyInsights = [];
+  Map<String, String> _weekAhead = {};
+  Map<String, String> _bestTimes = {};
+
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
@@ -24,309 +48,650 @@ class _DetailScreenState extends State<DetailScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
+      duration: const Duration(milliseconds: 600),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeIn,
+      curve: Curves.easeInOut,
     );
-    if (widget.location != null) {
-      _fetchForecast();
+    // Fetch immediately if location is available
+    _attemptFetch();
+  }
+
+  void _attemptFetch() {
+    final loc = widget.location?.trim() ?? '';
+    if (loc.isNotEmpty) {
+      setState(() => _isLoading = true);
+      Future.microtask(() {
+        _fetchForecast();
+      });
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(DetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Fetch when location changes
+    if (widget.location != oldWidget.location) {
+      _attemptFetch();
     }
   }
 
   Future<void> _fetchForecast() async {
+    final loc = widget.location?.trim() ?? '';
+    if (loc.isEmpty) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final data = await _weatherService.fetchForecast(widget.location!);
+
+      final current = data['current'] ?? {};
+      final today =
+          _firstOrNull(data['forecast']?['forecastday'] as List?) as Map?;
+      final tz = data['location']?['tz_id'] as String?;
+
+      bool isDaytime = true;
+      if (tz != null && tz.isNotEmpty) {
+        final timeData = await _timeService.getTimeForLocation(tz);
+        isDaytime = timeData['isDaytime'] as bool? ?? true;
+      }
+
+      if (!mounted) return;
       setState(() {
-        _weatherData = data;
+        _condition = current['condition']?['text'] ?? 'Clear';
+        _tempC = (current['temp_c'] as num?)?.round();
+        _hiC = (today?['day']?['maxtemp_c'] as num?)?.round();
+        _loC = (today?['day']?['mintemp_c'] as num?)?.round();
+        _locationName = data['location']?['name'] ?? widget.location;
+        _isDaytime = isDaytime;
+        _aqi = (current['aqi'] as num?)?.toInt();
+        _aqiText = current['air_quality_text']?.toString() ?? '';
+        _isLoading = false;
       });
-      _controller.forward();
+      _controller.forward(from: 0);
+
+      // Generate insights after successful data fetch
+      _generateInsights(data);
     } catch (e) {
-      print('Error fetching weather data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load Insights: $e')),
+        );
+      }
     }
   }
 
-  String _getDayName(int weekday) {
-    switch (weekday) {
-      case DateTime.monday:
-        return 'Mon';
-      case DateTime.tuesday:
-        return 'Tue';
-      case DateTime.wednesday:
-        return 'Wed';
-      case DateTime.thursday:
-        return 'Thu';
-      case DateTime.friday:
-        return 'Fri';
-      case DateTime.saturday:
-        return 'Sat';
-      case DateTime.sunday:
-        return 'Sun';
-      default:
-        return '';
+  void _generateInsights(Map<String, dynamic> forecastData) {
+    try {
+      final current = forecastData['current'] ?? {};
+      final dailyForecasts =
+          (forecastData['forecast']?['forecastday'] as List?) ?? [];
+
+      final insights = _insightsService.generateInsights(
+        condition: _condition,
+        currentTemp: _tempC ?? 0,
+        highTemp: _hiC ?? 0,
+        lowTemp: _loC ?? 0,
+        humidity: (current['humidity'] as num?)?.toInt() ?? 0,
+        windSpeed: (current['wind_kph'] as num?)?.toDouble() ?? 0.0,
+        uvIndex: (current['uv'] as num?)?.toDouble() ?? 0.0,
+        aqi: _aqi ?? 0,
+        dailyForecasts: dailyForecasts.cast<Map<String, dynamic>>(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _insightsSummary = insights['summary'] as String;
+          _recommendations =
+              (insights['recommendations'] as List).cast<String>();
+          _activities =
+              (insights['activities'] as List).cast<Map<String, String>>();
+          _healthTips =
+              (insights['healthTips'] as List).cast<Map<String, String>>();
+          _clothingAdvice =
+              (insights['clothingAdvice'] as Map).cast<String, String>();
+          _hourlyInsights =
+              (insights['hourlyInsights'] as List).cast<Map<String, dynamic>>();
+          _weekAhead = (insights['weekAhead'] as Map).cast<String, String>();
+          _bestTimes = (insights['bestTimes'] as Map).cast<String, String>();
+        });
+      }
+    } catch (e) {
+      // Insights generation failed, continue without them
     }
   }
 
-  IconData _getWeatherIcon(String weatherText) {
-    switch (weatherText.toLowerCase()) {
-      case 'clear':
-        return FontAwesomeIcons.moon;
-      case 'sunny':
-        return FontAwesomeIcons.solidSun;
-      case 'partly cloudy':
-        return FontAwesomeIcons.cloudSun;
-      case 'cloudy':
-        return FontAwesomeIcons.cloud;
-      case 'overcast':
-        return FontAwesomeIcons.cloudMeatball;
-      case 'mist':
-        return FontAwesomeIcons.water;
-      case 'fog':
-        return FontAwesomeIcons.smog;
-      case 'patchy rain possible':
-      case 'patchy rain nearby':
-      case 'light rain':
-      case 'moderate rain':
-      case 'heavy rain':
-      case 'light rain shower':
-      case 'moderate or heavy rain shower':
-        return FontAwesomeIcons.cloudRain;
-      case 'patchy snow possible':
-      case 'light snow':
-      case 'moderate snow':
-      case 'heavy snow':
-      case 'light snow showers':
-      case 'moderate or heavy snow showers':
-        return FontAwesomeIcons.snowflake;
-      case 'patchy sleet possible':
-      case 'light sleet':
-      case 'moderate or heavy sleet':
-        return FontAwesomeIcons.cloudRain; // For sleet
-      case 'freezing drizzle':
-      case 'patchy freezing drizzle possible':
-      case 'light freezing rain':
-        return FontAwesomeIcons.temperatureQuarter;
-      case 'thundery outbreaks possible':
-      case 'patchy light rain with thunder':
-      case 'moderate or heavy rain with thunder':
-        return FontAwesomeIcons.bolt;
-      case 'blizzard':
-        return FontAwesomeIcons.wind;
-      case 'ice pellets':
-      case 'light showers of ice pellets':
-      case 'moderate or heavy showers of ice pellets':
-        return FontAwesomeIcons.solidCircle;
-      default:
-        return FontAwesomeIcons.cloudSun;
-    }
-  }
-
-  Widget _buildHeaderSection() {
-    final current = _weatherData!['current'];
-    final temperature = current['temp_c'].round();
-    final description = current['condition']['text'];
-    final placeName = widget.location ?? '';
-
-    return Card(
-      elevation: 2,
-      surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
-      color: Theme.of(context).colorScheme.surface,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
+  Widget _buildAIInsightsCard() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context)
+                      .colorScheme
+                      .tertiaryContainer
+                      .withValues(alpha: 0.6),
+                  Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.4),
+                ],
+              ),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  placeName,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outlined,
+                        color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Weather Insights',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onSurface),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                // Summary
                 Text(
-                  '$temperature°C • $description',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  _insightsSummary.isEmpty
+                      ? 'Analyzing conditions...'
+                      : _insightsSummary,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4),
                 ),
+                if (_aqi != null && _aqi! > 0) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(Icons.air_outlined,
+                          color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Air Quality',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$_aqi • ${_aqiText.isNotEmpty ? _aqiText : 'AQI'}',
+                          style:
+                              Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (_recommendations.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  // Recommendations
+                  ..._recommendations.map((rec) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                rec,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        height: 1.4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
               ],
             ),
-            FaIcon(
-              _getWeatherIcon(description),
-              size: 50,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildForecastSection() {
-    final forecastDays = _weatherData!['forecast']['forecastday'];
-    return SizedBox(
-      height: 160,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: forecastDays.length,
-        itemBuilder: (context, index) {
-          final day = forecastDays[index];
-          final date = DateTime.parse(day['date']);
-          final weekday = _getDayName(date.weekday);
-          final conditionText = day['day']['condition']['text'];
+  Widget _buildActivityCards() {
+    if (_activities.isEmpty) return const SizedBox.shrink();
 
-          return Container(
-            width: 120,
-            margin: const EdgeInsets.only(right: 8),
-            child: Card(
-              elevation: 2,
-              surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
-              color: Theme.of(context).colorScheme.surface,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.directions_walk,
+                      color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Activity Suggestions',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ..._activities.asMap().entries.map((entry) {
+                final idx = entry.key;
+                final activity = entry.value;
+                final isLast = idx == _activities.length - 1;
+                return Column(
                   children: [
-                    Text(
-                      weekday,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    FaIcon(
-                      _getWeatherIcon(conditionText),
-                      size: 35,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${day['day']['maxtemp_c'].round()}°',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
+                          activity['icon'] ?? '🌤️',
+                          style: const TextStyle(fontSize: 32),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${day['day']['mintemp_c'].round()}°',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                activity['title'] ?? '',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                activity['description'] ?? '',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    Text(
-                      '${day['day']['daily_chance_of_rain']}% rain',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    if (!isLast) ...[
+                      const SizedBox(height: 12),
+                      Divider(
+                        height: 1,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.6),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
+                      const SizedBox(height: 12),
+                    ],
                   ],
-                ),
-              ),
-            ),
-          );
-        },
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildDetailsSection() {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 8,
-      mainAxisSpacing: 8,
-      children: [
-        _buildDetailCard(
-          'UV Index',
-          _weatherData!['current']['uv'].toString(),
-          WeatherIcons.day_sunny,
+  Widget _buildHealthTipsCard() {
+    if (_healthTips.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.health_and_safety,
+                      color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Health & Safety',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ..._healthTips.map((tip) {
+                final severity = tip['severity'] ?? 'low';
+                Color indicatorColor;
+                if (severity == 'high') {
+                  indicatorColor = Theme.of(context).colorScheme.error;
+                } else if (severity == 'medium') {
+                  indicatorColor = Colors.orange;
+                } else {
+                  indicatorColor = Colors.green;
+                }
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: indicatorColor.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tip['icon'] ?? '',
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                tip['title'] ?? '',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: indicatorColor,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tip['description'] ?? '',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
         ),
-        _buildDetailCard(
-          'Precipitation',
-          '${_weatherData!['current']['precip_mm']} mm',
-          WeatherIcons.rain,
-        ),
-        _buildDetailCard(
-          'Wind Direction',
-          _weatherData!['current']['wind_dir'],
-          WeatherIcons.strong_wind,
-        ),
-        _buildDetailCard(
-          'Pressure',
-          '${_weatherData!['current']['pressure_mb']} mb',
-          WeatherIcons.barometer,
-        ),
-        _buildDetailCard(
-          'Visibility',
-          '${_weatherData!['current']['vis_km']} km',
-          WeatherIcons.fog,
-        ),
-        _buildDetailCard(
-          'Moon Phase',
-          _weatherData!['forecast']['forecastday'][0]['astro']['moon_phase'],
-          WeatherIcons.moon_alt_waxing_crescent_3,
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildDetailCard(String title, String value, IconData icon) {
-    return Card(
-      elevation: 2,
-      surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
-      color: Theme.of(context).colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
+  Widget _buildClothingCard() {
+    if (_clothingAdvice.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Text(
+                _clothingAdvice['icon'] ?? '👕',
+                style: const TextStyle(fontSize: 40),
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            BoxedIcon(
-              icon,
-              size: 32,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                color: Theme.of(context).colorScheme.onSurface,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'What to Wear',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _clothingAdvice['advice'] ?? '',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer,
+                          ),
+                    ),
+                  ],
+                ),
               ),
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHourlyInsightsCard() {
+    if (_hourlyInsights.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Today\'s Timeline',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              ..._hourlyInsights.map((insight) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 80,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          insight['time'] ?? '',
+                          style:
+                              Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                  ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '${insight['temp']}°',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          insight['insight'] ?? '',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeekAheadCard() {
+    if (_weekAhead.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        color: Theme.of(context).colorScheme.tertiaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.calendar_month,
+                      color: Theme.of(context).colorScheme.onTertiaryContainer),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Week Ahead',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color:
+                              Theme.of(context).colorScheme.onTertiaryContainer,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _weekAhead['summary'] ?? '',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onTertiaryContainer,
+                      height: 1.5,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBestTimesCard() {
+    if (_bestTimes.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.wb_sunny,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _bestTimes['title'] ?? '',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _bestTimes['description'] ?? '',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -334,32 +699,106 @@ class _DetailScreenState extends State<DetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.location == null) {
+    if (widget.location == null || widget.location!.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Details')),
+        appBar: AppBar(title: const Text('Insights')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Select a location from Home',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'to view the detailed Insights',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Insights')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
+    final condition = _condition;
+    final isDaytime = _isDaytime;
+
     return Scaffold(
-      // Remove the AppBar
-      body: SafeArea(
-        child: _weatherData == null
-            ? const Center(child: CircularProgressIndicator())
-            : FadeTransition(
-                opacity: _fadeAnimation,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      _buildHeaderSection(),
-                      const SizedBox(height: 8),
-                      _buildForecastSection(),
-                      _buildDetailsSection(),
-                    ],
-                  ),
-                ),
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        titleSpacing: 16,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Weather Insights'),
+            if (_locationName != null)
+              Text(
+                _locationName!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.7),
+                    ),
               ),
+          ],
+        ),
+      ),
+      body: Stack(
+        children: [
+          AnimatedWeatherBackdrop(
+            condition: condition,
+            isDaytime: isDaytime,
+            height: 320,
+            intensity: 0.6,
+          ),
+          SafeArea(
+            child: RefreshIndicator.adaptive(
+              onRefresh: _fetchForecast,
+              displacement: 32,
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        slivers: [
+                          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+
+                          // AI Insights only - no duplicate home page content
+                          SliverToBoxAdapter(child: _buildAIInsightsCard()),
+                          SliverToBoxAdapter(child: _buildActivityCards()),
+                          SliverToBoxAdapter(child: _buildClothingCard()),
+                          SliverToBoxAdapter(child: _buildBestTimesCard()),
+                          SliverToBoxAdapter(child: _buildHourlyInsightsCard()),
+                          SliverToBoxAdapter(child: _buildHealthTipsCard()),
+                          SliverToBoxAdapter(child: _buildWeekAheadCard()),
+
+                          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -369,4 +808,9 @@ class _DetailScreenState extends State<DetailScreen>
     _controller.dispose();
     super.dispose();
   }
+}
+
+dynamic _firstOrNull(List? list) {
+  if (list == null || list.isEmpty) return null;
+  return list.first;
 }

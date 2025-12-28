@@ -1,124 +1,220 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
+
 import 'package:dynamic_color/dynamic_color.dart';
-import 'settings_screen.dart';
+import 'package:flutter/material.dart';
+
 import 'detail_screen.dart';
+import 'settings_screen.dart';
 import 'weather_home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  runApp(const MaterialApp(
-    home: WeatherFast(),
-  ));
+  runApp(const WeatherFastApp());
 }
 
-class WeatherFast extends StatelessWidget {
-  const WeatherFast({super.key});
+class WeatherFastApp extends StatelessWidget {
+  const WeatherFastApp({super.key});
+
+  ThemeData _buildTheme(ColorScheme colorScheme) {
+    final surfaceTint = colorScheme.surfaceTint;
+    final isDark = colorScheme.brightness == Brightness.dark;
+    final baseText = isDark
+        ? Typography.material2021().white
+        : Typography.material2021().black;
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: colorScheme,
+      visualDensity: VisualDensity.standard,
+      textTheme: baseText.apply(
+        bodyColor: colorScheme.onSurface,
+        displayColor: colorScheme.onSurface,
+      ),
+      appBarTheme: AppBarTheme(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: colorScheme.surface.withValues(alpha: 0.85),
+        foregroundColor: colorScheme.onSurface,
+        centerTitle: false,
+        surfaceTintColor: Colors.transparent,
+      ),
+      cardTheme: CardThemeData(
+        elevation: 2,
+        clipBehavior: Clip.antiAlias,
+        color: colorScheme.surface.withValues(alpha: 0.9),
+        surfaceTintColor: surfaceTint,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: colorScheme.surfaceContainerHighest,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colorScheme.primary, width: 1.2),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        indicatorColor: colorScheme.secondaryContainer,
+        backgroundColor: colorScheme.surface.withValues(alpha: 0.9),
+        elevation: 2,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return IconThemeData(color: colorScheme.onSecondaryContainer);
+          }
+          return IconThemeData(color: colorScheme.onSurfaceVariant);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final color = states.contains(WidgetState.selected)
+              ? colorScheme.onSecondaryContainer
+              : colorScheme.onSurfaceVariant;
+          return TextStyle(fontWeight: FontWeight.w600, color: color);
+        }),
+      ),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: colorScheme.surfaceContainerHighest,
+        selectedColor: colorScheme.secondaryContainer,
+        disabledColor: colorScheme.surfaceContainerHighest,
+        labelStyle: TextStyle(color: colorScheme.onSurface),
+        secondaryLabelStyle: TextStyle(color: colorScheme.onSecondaryContainer),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          side: BorderSide(color: colorScheme.outlineVariant),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        ),
+      ),
+      listTileTheme: ListTileThemeData(
+        tileColor: colorScheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        iconColor: colorScheme.onSurfaceVariant,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: colorScheme.inverseSurface,
+        contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: surfaceTint,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: surfaceTint,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      dividerColor: colorScheme.outlineVariant,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    const defaultSeedColor = Colors.blue;
+    const seed = Color(0xFF3B5BA9);
 
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        final lightColorScheme = lightDynamic ??
-            ColorScheme.fromSeed(
-                seedColor: defaultSeedColor, brightness: Brightness.light);
-        final darkColorScheme = darkDynamic ??
-            ColorScheme.fromSeed(
-                seedColor: defaultSeedColor, brightness: Brightness.dark);
+        final lightScheme = lightDynamic ??
+            ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
+        final darkScheme = darkDynamic ??
+            ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
 
         return MaterialApp(
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: darkColorScheme,
-          ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            colorScheme: darkColorScheme,
-          ),
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(lightScheme),
+          darkTheme: _buildTheme(darkScheme),
           themeMode: ThemeMode.system,
-          home: const WeatherTabs(),
+          home: const WeatherShell(),
         );
       },
     );
   }
 }
 
-class WeatherTabs extends StatefulWidget {
-  const WeatherTabs({Key? key}) : super(key: key);
+class WeatherShell extends StatefulWidget {
+  const WeatherShell({super.key});
 
   @override
-  _WeatherTabsState createState() => _WeatherTabsState();
+  State<WeatherShell> createState() => _WeatherShellState();
 }
 
-class _WeatherTabsState extends State<WeatherTabs> {
-  int _selectedIndex = 0;
+class _WeatherShellState extends State<WeatherShell> {
+  int _index = 0;
   String? _currentLocation;
+
   Color get _navigationBarColor =>
-      Theme.of(context).brightness == Brightness.dark
-          ? Colors.black.withOpacity(0.2)
-          : Colors.white.withOpacity(0.2);
+      Theme.of(context).colorScheme.surface.withValues(alpha: 0.9);
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  // Callback to update the current location from WeatherHome
-  void _updateLocation(String location) {
-    // print('WeatherTabs: _updateLocation called with $location'); // Debug print
-    setState(() {
-      _currentLocation = location;
-    });
+  void _onLocationSelected(String location) {
+    setState(() => _currentLocation = location);
   }
 
   @override
   Widget build(BuildContext context) {
-    List<Widget> widgetOptions = <Widget>[
-      WeatherHome(
-        onLocationSelected: _updateLocation,
-      ),
-      DetailScreen(
-        key: ValueKey(_currentLocation), // Add this line to force rebuild
-        location: _currentLocation,
-      ),
+    final pages = <Widget>[
+      WeatherHome(onLocationSelected: _onLocationSelected),
+      DetailScreen(location: _currentLocation),
       const SettingsScreen(),
     ];
 
     return Scaffold(
       extendBody: true,
       body: IndexedStack(
-        index: _selectedIndex,
-        children: widgetOptions,
+        index: _index,
+        children: pages,
       ),
       bottomNavigationBar: ClipRRect(
-        // Add this wrapper
         child: BackdropFilter(
-          // Add blur effect
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: NavigationBar(
             backgroundColor: _navigationBarColor,
-            elevation: 0,
+            elevation: 1,
             shadowColor: Colors.transparent,
             surfaceTintColor: Colors.transparent,
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onItemTapped,
+            selectedIndex: _index,
+            onDestinationSelected: (value) => setState(() => _index = value),
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.home_rounded),
-                label: 'Home',
-              ),
+                  icon: Icon(Icons.home_rounded), label: 'Home'),
               NavigationDestination(
-                icon: Icon(Icons.list_rounded),
-                label: 'Details',
-              ),
+                  icon: Icon(Icons.timeline_rounded), label: 'Insights'),
               NavigationDestination(
-                icon: Icon(Icons.settings_rounded),
-                label: 'Settings',
-              ),
+                  icon: Icon(Icons.settings_rounded), label: 'Settings'),
             ],
           ),
         ),
