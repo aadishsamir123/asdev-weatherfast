@@ -144,11 +144,15 @@ class WeatherInsightsService {
   double _averageTemp(List<Map<String, dynamic>> forecasts) {
     if (forecasts.isEmpty) return 20.0;
     double sum = 0;
+    int count = 0;
     for (var f in forecasts) {
       final max = f['day']?['maxtemp_c'] as num?;
-      if (max != null) sum += max.toDouble();
+      if (max != null) {
+        sum += max.toDouble();
+        count++;
+      }
     }
-    return sum / forecasts.length;
+    return count > 0 ? sum / count : 20.0;
   }
 
   List<Map<String, String>> _generateActivitySuggestions(
