@@ -397,6 +397,10 @@ class WeatherInsightsService {
         .whereType<num>()
         .toList();
 
+    if (temps.isEmpty) {
+      return {'summary': 'Forecast data unavailable'};
+    }
+
     final avgTemp = temps.reduce((a, b) => a + b) / temps.length;
     final maxTemp = temps.reduce(max);
     final minTemp = temps.reduce(min);
