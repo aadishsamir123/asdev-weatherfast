@@ -15,7 +15,7 @@ dependencies:
   http: ^1.2.2
   dynamic_color: ^1.7.0
   flutter_typeahead: ^5.2.0
-  geolocator: ^13.0.2
+  geolocator: ^14.0.2
   permission_handler: ^11.1.0
   font_awesome_flutter: ^10.0.0
   cached_network_image: ^3.2.3
