@@ -18,30 +18,98 @@ class WeatherService {
       // Fetch weather data for those coordinates
       final weatherData = await _fetchWeatherData(coords['lat'], coords['lon']);
 
+      // Get current time in the location's timezone
+      final currentTime = weatherData['current']['time'];
+
       // Transform to match expected format
       return {
         'location': {
-          'name': coords['name'],
+          'name': coords['name'] ?? 'Unknown',
           'region': coords['region'] ?? '',
           'country': coords['country'] ?? '',
           'lat': coords['lat'],
           'lon': coords['lon'],
+          'tz_id': weatherData['timezone'] ?? 'UTC',
+          'localtime': currentTime ?? '',
         },
         'current': {
-          'temp_c': weatherData['current']['temperature_2m'],
-          'temp_f': (weatherData['current']['temperature_2m'] * 9 / 5) + 32,
+          'temp_c':
+              (weatherData['current']['temperature_2m'] as num).toDouble(),
+          'temp_f':
+              ((weatherData['current']['temperature_2m'] as num).toDouble() *
+                      9 /
+                      5) +
+                  32,
           'condition': {
-            'text':
-                _getWeatherDescription(weatherData['current']['weather_code']),
-            'icon': _getWeatherIcon(weatherData['current']['weather_code']),
+            'text': _getWeatherDescription(
+                (weatherData['current']['weather_code'] as num).toInt()),
+            'icon': '//cdn.weatherapi.com/weather/64x64/day/116.png',
           },
-          'humidity': weatherData['current']['relative_humidity_2m'],
-          'wind_kph': weatherData['current']['wind_speed_10m'],
-          'wind_degree': weatherData['current']['wind_direction_10m'],
-          'pressure_mb': weatherData['current']['pressure_msl'],
-          'vis_km': weatherData['current'].containsKey('visibility')
-              ? weatherData['current']['visibility'] / 1000
-              : 10,
+          'humidity':
+              (weatherData['current']['relative_humidity_2m'] as num).toInt(),
+          'wind_kph':
+              (weatherData['current']['wind_speed_10m'] as num).toDouble(),
+          'wind_degree':
+              (weatherData['current']['wind_direction_10m'] as num).toInt(),
+          'wind_dir': _getWindDirection(
+              (weatherData['current']['wind_direction_10m'] as num).toInt()),
+          'pressure_mb':
+              (weatherData['current']['pressure_msl'] as num).toDouble(),
+          'precip_mm': 0.0,
+          'vis_km': (() {
+            // Prefer current visibility if provided (meters -> km)
+            if (weatherData['current']?.containsKey('visibility') == true) {
+              final v = weatherData['current']['visibility'];
+              if (v is num) return v.toDouble() / 1000.0;
+            }
+            // Fallback to hourly visibility nearest to current time
+            try {
+              final hourly = weatherData['hourly'];
+              final times = (hourly['time'] as List?)
+                      ?.map((e) => e.toString())
+                      .toList() ??
+                  const [];
+              final visList =
+                  (hourly['visibility'] as List?)?.toList() ?? const [];
+              if (times.isEmpty || visList.isEmpty) return 10.0;
+
+              final currentStr = weatherData['current']['time']?.toString();
+              if (currentStr == null) return 10.0;
+              final current = DateTime.tryParse(currentStr);
+              if (current == null) return 10.0;
+
+              // Hourly stamps are at HH:00; align by flooring minutes
+              final aligned = DateTime(
+                  current.year, current.month, current.day, current.hour);
+              final alignedStr =
+                  aligned.toIso8601String().substring(0, 13) + ':00';
+
+              // Find exact hour match, else nearest
+              int idx = times.indexWhere((t) => t.startsWith(alignedStr));
+              if (idx < 0) {
+                // Nearest by absolute difference
+                Duration best = const Duration(days: 365);
+                int bestIdx = -1;
+                for (int i = 0; i < times.length; i++) {
+                  final dt = DateTime.tryParse(times[i]);
+                  if (dt == null) continue;
+                  final diff = (dt.difference(current)).abs();
+                  if (diff < best) {
+                    best = diff;
+                    bestIdx = i;
+                  }
+                }
+                idx = bestIdx;
+              }
+
+              if (idx >= 0 && idx < visList.length) {
+                final v = visList[idx];
+                if (v is num) return v.toDouble() / 1000.0;
+              }
+            } catch (_) {}
+            // Sensible final fallback
+            return 10.0;
+          })(),
         },
       };
     } catch (e) {
@@ -61,36 +129,151 @@ class WeatherService {
 
       // Transform daily forecast to match expected format
       final List<dynamic> forecastDays = [];
-      final List<String> dates =
-          List<String>.from(weatherData['daily']['time']);
-      final List<int> weatherCodes =
-          List<int>.from(weatherData['daily']['weather_code']);
-      final List<double> maxTemps =
-          List<double>.from(weatherData['daily']['temperature_2m_max']);
-      final List<double> minTemps =
-          List<double>.from(weatherData['daily']['temperature_2m_min']);
-      final List<int> precipProb =
-          List<int>.from(weatherData['daily']['precipitation_probability_max']);
+      final daily = weatherData['daily'];
+      final hourly = weatherData['hourly'];
+
+      // Safely extract lists with proper type handling
+      final dates = daily['time'] as List;
+      final weatherCodes = daily['weather_code'] as List;
+      final maxTemps = daily['temperature_2m_max'] as List;
+      final minTemps = daily['temperature_2m_min'] as List;
+      final precipProb = daily['precipitation_probability_max'] as List;
+
+      // Extract hourly data
+      final hourlyTimes = hourly['time'] as List;
+      final hourlyTemps = hourly['temperature_2m'] as List;
+      final hourlyWeatherCodes = hourly['weather_code'] as List;
 
       for (int i = 0; i < dates.length && i < 14; i++) {
+        final maxTemp = (maxTemps[i] as num).toDouble();
+        final minTemp = (minTemps[i] as num).toDouble();
+        final weatherCode = (weatherCodes[i] as num).toInt();
+        final precip = (precipProb[i] as num).toInt();
+
+        // Get hourly data for this day
+        final dayDate = dates[i].toString();
+        final List<dynamic> hourlyDataForDay = [];
+
+        for (int h = 0; h < hourlyTimes.length; h++) {
+          final hourTimeStr = hourlyTimes[h].toString();
+          if (hourTimeStr.startsWith(dayDate)) {
+            hourlyDataForDay.add({
+              'time': hourTimeStr,
+              'temp_c': (hourlyTemps[h] as num).toDouble(),
+              'temp_f': ((hourlyTemps[h] as num).toDouble() * 9 / 5) + 32,
+              'condition': {
+                'text': _getWeatherDescription(
+                    (hourlyWeatherCodes[h] as num).toInt()),
+                'icon': '//cdn.weatherapi.com/weather/64x64/day/116.png',
+              },
+            });
+          }
+        }
+
         forecastDays.add({
-          'date': dates[i],
+          'date': dayDate,
           'day': {
-            'maxtemp_c': maxTemps[i],
-            'maxtemp_f': (maxTemps[i] * 9 / 5) + 32,
-            'mintemp_c': minTemps[i],
-            'mintemp_f': (minTemps[i] * 9 / 5) + 32,
+            'maxtemp_c': maxTemp,
+            'maxtemp_f': (maxTemp * 9 / 5) + 32,
+            'mintemp_c': minTemp,
+            'mintemp_f': (minTemp * 9 / 5) + 32,
             'condition': {
-              'text': _getWeatherDescription(weatherCodes[i]),
-              'icon': _getWeatherIcon(weatherCodes[i]),
+              'text': _getWeatherDescription(weatherCode),
+              'icon': '//cdn.weatherapi.com/weather/64x64/day/116.png',
             },
-            'daily_chance_of_rain': precipProb[i],
+            'daily_chance_of_rain': precip,
           },
+          'astro': {
+            'moon_phase': 'New Moon',
+            'sunrise': '06:00 AM',
+            'sunset': '06:00 PM',
+          },
+          'hour': hourlyDataForDay,
         });
       }
 
       return {
-        'location': coords,
+        'location': {
+          'name': coords['name'] ?? 'Unknown',
+          'region': coords['region'] ?? '',
+          'country': coords['country'] ?? '',
+          'lat': coords['lat'],
+          'lon': coords['lon'],
+          'tz_id': weatherData['timezone'] ?? 'UTC',
+        },
+        'current': {
+          'temp_c':
+              (weatherData['current']['temperature_2m'] as num).toDouble(),
+          'temp_f':
+              ((weatherData['current']['temperature_2m'] as num).toDouble() *
+                      9 /
+                      5) +
+                  32,
+          'condition': {
+            'text': _getWeatherDescription(
+                (weatherData['current']['weather_code'] as num).toInt()),
+            'icon': '//cdn.weatherapi.com/weather/64x64/day/116.png',
+          },
+          'humidity':
+              (weatherData['current']['relative_humidity_2m'] as num).toInt(),
+          'wind_kph':
+              (weatherData['current']['wind_speed_10m'] as num).toDouble(),
+          'wind_degree':
+              (weatherData['current']['wind_direction_10m'] as num).toInt(),
+          'wind_dir': _getWindDirection(
+              (weatherData['current']['wind_direction_10m'] as num).toInt()),
+          'pressure_mb':
+              (weatherData['current']['pressure_msl'] as num).toDouble(),
+          'precip_mm': 0.0,
+          'vis_km': (() {
+            if (weatherData['current']?.containsKey('visibility') == true) {
+              final v = weatherData['current']['visibility'];
+              if (v is num) return v.toDouble() / 1000.0;
+            }
+            try {
+              final hourly = weatherData['hourly'];
+              final times = (hourly['time'] as List?)
+                      ?.map((e) => e.toString())
+                      .toList() ??
+                  const [];
+              final visList =
+                  (hourly['visibility'] as List?)?.toList() ?? const [];
+              if (times.isEmpty || visList.isEmpty) return 10.0;
+
+              final currentStr = weatherData['current']['time']?.toString();
+              if (currentStr == null) return 10.0;
+              final current = DateTime.tryParse(currentStr);
+              if (current == null) return 10.0;
+
+              final aligned = DateTime(
+                  current.year, current.month, current.day, current.hour);
+              final alignedStr =
+                  aligned.toIso8601String().substring(0, 13) + ':00';
+
+              int idx = times.indexWhere((t) => t.startsWith(alignedStr));
+              if (idx < 0) {
+                Duration best = const Duration(days: 365);
+                int bestIdx = -1;
+                for (int i = 0; i < times.length; i++) {
+                  final dt = DateTime.tryParse(times[i]);
+                  if (dt == null) continue;
+                  final diff = (dt.difference(current)).abs();
+                  if (diff < best) {
+                    best = diff;
+                    bestIdx = i;
+                  }
+                }
+                idx = bestIdx;
+              }
+
+              if (idx >= 0 && idx < visList.length) {
+                final v = visList[idx];
+                if (v is num) return v.toDouble() / 1000.0;
+              }
+            } catch (_) {}
+            return 10.0;
+          })(),
+        },
         'forecast': {
           'forecastday': forecastDays,
         },
@@ -125,9 +308,55 @@ class WeatherService {
     }
   }
 
-  /// Get coordinates for a location name
+  /// Get coordinates for a location name or parse lat,lon coordinates
   Future<Map<String, dynamic>?> _getLocationCoordinates(String location) async {
     try {
+      // Check if the location is in lat,lon format (e.g., "37.7749,-122.4194")
+      if (location.contains(',')) {
+        final parts = location.split(',');
+        if (parts.length == 2) {
+          final lat = double.tryParse(parts[0].trim());
+          final lon = double.tryParse(parts[1].trim());
+          if (lat != null && lon != null) {
+            // Use BigDataCloud free reverse geocoding API (no key required)
+            try {
+              final reverseGeoUrl = Uri.parse(
+                  'https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=$lat&longitude=$lon&localityLanguage=en');
+              final reverseResponse = await http.get(reverseGeoUrl);
+
+              if (reverseResponse.statusCode == 200) {
+                final reverseData = jsonDecode(reverseResponse.body);
+                final city =
+                    reverseData['city'] ?? reverseData['locality'] ?? 'Unknown';
+                final country = reverseData['countryName'] ?? '';
+                final region = reverseData['principalSubdivision'] ?? '';
+
+                return {
+                  'name': city,
+                  'region': region,
+                  'country': country,
+                  'lat': lat,
+                  'lon': lon,
+                };
+              }
+            } catch (e) {
+              // Fallback if reverse geocoding fails
+              print('Reverse geocoding failed: $e');
+            }
+
+            // Fallback to generic name if reverse geocoding fails
+            return {
+              'name': 'Location ($lat, $lon)',
+              'region': '',
+              'country': '',
+              'lat': lat,
+              'lon': lon,
+            };
+          }
+        }
+      }
+
+      // Otherwise, search by location name
       final url =
           Uri.parse('$_geoUrl?name=$location&count=1&language=en&format=json');
       final response = await http.get(url);
@@ -139,11 +368,11 @@ class WeatherService {
         }
         final result = data['results'][0];
         return {
-          'name': result['name'],
-          'region': result['admin1'],
-          'country': result['country'],
-          'lat': result['latitude'],
-          'lon': result['longitude'],
+          'name': result['name'] ?? 'Unknown',
+          'region': result['admin1']?.toString() ?? '',
+          'country': result['country']?.toString() ?? '',
+          'lat': (result['latitude'] as num).toDouble(),
+          'lon': (result['longitude'] as num).toDouble(),
         };
       }
       return null;
@@ -155,15 +384,18 @@ class WeatherService {
   /// Fetch weather data from Open-Meteo API
   Future<Map<String, dynamic>> _fetchWeatherData(double lat, double lon) async {
     final url = Uri.parse('$_weatherUrl?latitude=$lat&longitude=$lon'
-        '&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl'
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,time'
-        '&timezone=auto');
+        '&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl,visibility'
+        '&hourly=temperature_2m,weather_code,visibility'
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
+        '&timezone=auto'
+        '&forecast_days=14');
 
     final response = await http.get(url);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to fetch weather data');
+      throw Exception(
+          'Failed to fetch weather data: ${response.statusCode} ${response.body}');
     }
   }
 
@@ -184,20 +416,16 @@ class WeatherService {
     return 'Unknown';
   }
 
-  /// Convert WMO weather code to icon URL
-  String _getWeatherIcon(int code) {
-    // Return emoji-like representations or icon codes
-    if (code == 0) return '☀️'; // Clear
-    if (code == 1 || code == 2) return '⛅'; // Mostly clear
-    if (code == 3) return '☁️'; // Overcast
-    if (code == 45 || code == 48) return '🌫️'; // Foggy
-    if (code == 51 || code == 53 || code == 55) return '🌧️'; // Drizzle
-    if (code == 61 || code == 63 || code == 65) return '🌧️'; // Rain
-    if (code == 71 || code == 73 || code == 75) return '❄️'; // Snow
-    if (code == 77) return '❄️'; // Snow grains
-    if (code == 80 || code == 81 || code == 82) return '🌦️'; // Rain showers
-    if (code == 85 || code == 86) return '❄️'; // Snow showers
-    if (code == 95 || code == 96 || code == 99) return '⛈️'; // Thunderstorm
-    return '❓';
+  /// Convert wind degree to cardinal direction
+  String _getWindDirection(int degree) {
+    if (degree >= 337.5 || degree < 22.5) return 'N';
+    if (degree >= 22.5 && degree < 67.5) return 'NE';
+    if (degree >= 67.5 && degree < 112.5) return 'E';
+    if (degree >= 112.5 && degree < 157.5) return 'SE';
+    if (degree >= 157.5 && degree < 202.5) return 'S';
+    if (degree >= 202.5 && degree < 247.5) return 'SW';
+    if (degree >= 247.5 && degree < 292.5) return 'W';
+    if (degree >= 292.5 && degree < 337.5) return 'NW';
+    return 'N';
   }
 }

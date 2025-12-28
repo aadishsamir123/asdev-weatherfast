@@ -3,6 +3,9 @@ updates:
   # Enable version updates for Dart/Flutter dependencies
   - package-ecosystem: "pub"
     directory: "/"
+    schedule:
+      interval: "daily"
+      time: "03:00"
     open-pull-requests-limit: 5
     pull-request-branch-name:
       separator: "/"

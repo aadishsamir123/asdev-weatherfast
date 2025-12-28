@@ -60,45 +60,45 @@ class _WeatherHomeState extends State<WeatherHome> {
   }
 
   Future<void> _fetchWeatherForCurrentLocation() async {
-  try {
-    // Check if location services are enabled
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _showError('Location services are disabled. Please enable them in settings.');
-      return;
-    }
-
-    // Check location permission status
-    LocationPermission permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      // Request permission
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        _showError('Location permission denied');
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showError(
+            'Location services are disabled. Please enable them in settings.');
         return;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      _showError(
-        'Location permissions are permanently denied. Please enable them in app settings.',
+      // Check location permission status
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        // Request permission
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showError('Location permission denied');
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _showError(
+          'Location permissions are permanently denied. Please enable them in app settings.',
+        );
+        return;
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
       );
-      return;
+
+      String coordinates = '${position.latitude},${position.longitude}';
+      await _fetchWeather(coordinates);
+    } catch (e) {
+      _showError('Error fetching location: ${e.toString()}');
     }
-
-    // Get current position
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    String coordinates = '${position.latitude},${position.longitude}';
-    await _fetchWeather(coordinates);
-
-  } catch (e) {
-    _showError('Error fetching location: ${e.toString()}');
   }
-}
 
   Future<void> _fetchWeather(String locationQuery) async {
     try {
@@ -145,7 +145,7 @@ class _WeatherHomeState extends State<WeatherHome> {
     }
 
     switch (weatherText?.toLowerCase()) {
-    // Clear conditions
+      // Clear conditions
       case 'sunny':
       case 'clear':
         return [
@@ -153,7 +153,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.lightBlue.shade200,
         ];
 
-    // Cloudy conditions
+      // Cloudy conditions
       case 'partly cloudy':
       case 'cloudy':
       case 'overcast':
@@ -162,7 +162,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.blueGrey.shade300,
         ];
 
-    // Misty/Foggy conditions
+      // Misty/Foggy conditions
       case 'mist':
       case 'fog':
       case 'freezing fog':
@@ -171,7 +171,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.grey.shade300,
         ];
 
-    // Rain conditions
+      // Rain conditions
       case 'patchy rain possible':
       case 'patchy rain nearby':
       case 'patchy light rain':
@@ -188,7 +188,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.blueGrey.shade400,
         ];
 
-    // Snow conditions
+      // Snow conditions
       case 'patchy snow possible':
       case 'blowing snow':
       case 'patchy light snow':
@@ -204,7 +204,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.grey.shade100,
         ];
 
-    // Mixed precipitation
+      // Mixed precipitation
       case 'patchy sleet possible':
       case 'light sleet':
       case 'moderate or heavy sleet':
@@ -215,7 +215,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.grey.shade400,
         ];
 
-    // Freezing conditions
+      // Freezing conditions
       case 'patchy freezing drizzle possible':
       case 'freezing drizzle':
       case 'heavy freezing drizzle':
@@ -226,7 +226,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.blueGrey.shade200,
         ];
 
-    // Ice conditions
+      // Ice conditions
       case 'ice pellets':
       case 'light showers of ice pellets':
       case 'moderate or heavy showers of ice pellets':
@@ -235,7 +235,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.grey.shade200,
         ];
 
-    // Thunder conditions
+      // Thunder conditions
       case 'thundery outbreaks possible':
       case 'patchy light rain with thunder':
       case 'moderate or heavy rain with thunder':
@@ -246,14 +246,14 @@ class _WeatherHomeState extends State<WeatherHome> {
           Colors.grey.shade600,
         ];
 
-    // Blizzard
+      // Blizzard
       case 'blizzard':
         return [
           Colors.grey.shade200,
           Colors.grey.shade400,
         ];
 
-    // Default case
+      // Default case
       default:
         return [
           Colors.blue.shade200,
@@ -307,32 +307,32 @@ class _WeatherHomeState extends State<WeatherHome> {
                   child: _weatherData == null
                       ? const Center(child: CircularProgressIndicator())
                       : SmartRefresher(
-                    enablePullDown: true,
-                    header: const WaterDropHeader(),
-                    controller: _refreshController,
-                    onRefresh: () async {
-                      try {
-                        await _fetchWeather(_currentLocation ?? '');
-                        _refreshController.refreshCompleted();
-                      } catch (e) {
-                        _refreshController.refreshFailed();
-                      }
-                    },
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 8.0),
-                          _buildLocationCard(),
-                          const SizedBox(height: 8.0),
-                          _buildWeatherDetails(),
-                          _buildAdviceCard(),
-                          const SizedBox(height: 16.0),
-                          _buildHourlyForecastCard(),
-                          const SizedBox(height: 8.0),
-                        ],
-                      ),
-                    ),
-                  ),
+                          enablePullDown: true,
+                          header: const WaterDropHeader(),
+                          controller: _refreshController,
+                          onRefresh: () async {
+                            try {
+                              await _fetchWeather(_currentLocation ?? '');
+                              _refreshController.refreshCompleted();
+                            } catch (e) {
+                              _refreshController.refreshFailed();
+                            }
+                          },
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                const SizedBox(height: 8.0),
+                                _buildLocationCard(),
+                                const SizedBox(height: 8.0),
+                                _buildWeatherDetails(),
+                                _buildAdviceCard(),
+                                const SizedBox(height: 16.0),
+                                _buildHourlyForecastCard(),
+                                const SizedBox(height: 8.0),
+                              ],
+                            ),
+                          ),
+                        ),
                 )
               ],
             ),

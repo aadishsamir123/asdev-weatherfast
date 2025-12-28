@@ -173,78 +173,77 @@ class _DetailScreenState extends State<DetailScreen>
   Widget _buildForecastSection() {
     final forecastDays = _weatherData!['forecast']['forecastday'];
     return SizedBox(
-      height: 150,
-      child: Row(
-        children: List.generate(
-          forecastDays.length,
-          (index) {
-            final day = forecastDays[index];
-            final date = DateTime.parse(day['date']);
-            final weekday = _getDayName(date.weekday);
-            final conditionText = day['day']['condition']['text'];
+      height: 160,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: forecastDays.length,
+        itemBuilder: (context, index) {
+          final day = forecastDays[index];
+          final date = DateTime.parse(day['date']);
+          final weekday = _getDayName(date.weekday);
+          final conditionText = day['day']['condition']['text'];
 
-            return Expanded(
-              child: Card(
-                elevation: 2,
-                surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
-                color: Theme.of(context).colorScheme.surface,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Text(
-                        weekday,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+          return Container(
+            width: 120,
+            margin: const EdgeInsets.only(right: 8),
+            child: Card(
+              elevation: 2,
+              surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
+              color: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Text(
+                      weekday,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
-                      FaIcon(
-                        _getWeatherIcon(conditionText),
-                        size: 35,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${day['day']['maxtemp_c'].round()}°',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
+                    ),
+                    FaIcon(
+                      _getWeatherIcon(conditionText),
+                      size: 35,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${day['day']['maxtemp_c'].round()}°',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${day['day']['mintemp_c'].round()}°',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        '${day['day']['daily_chance_of_rain']}% rain',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        textAlign: TextAlign.center,
+                        const SizedBox(width: 8),
+                        Text(
+                          '${day['day']['mintemp_c'].round()}°',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${day['day']['daily_chance_of_rain']}% rain',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                    ],
-                  ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
