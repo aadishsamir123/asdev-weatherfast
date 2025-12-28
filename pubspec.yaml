@@ -22,7 +22,7 @@ dependencies:
   weather_icons: ^3.0.0
   rive: ^0.13.20
   intl: ^0.17.0
-  flutter_custom_tabs: ^2.0.0
+  flutter_custom_tabs: ^2.4.1
   package_info_plus: ^8.1.2
   timezone: ^0.7.0
   flutter_inappwebview: ^6.1.5
