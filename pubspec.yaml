@@ -24,7 +24,7 @@ dependencies:
   intl: ^0.17.0
   flutter_custom_tabs: ^2.4.1
   package_info_plus: ^8.1.2
-  timezone: ^0.7.0
+  timezone: ^0.10.1
   flutter_inappwebview: ^6.1.5
   lottie: ^2.7.0
   pull_to_refresh_flutter3: ^2.0.0
