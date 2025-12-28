@@ -13,9 +13,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.aadishsamir.weatherfast"
-    compileSdkVersion 33
-    compileSdk = 35
-    ndkVersion = "25.1.8937393"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = "29.0.14206865"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
