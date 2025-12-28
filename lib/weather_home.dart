@@ -676,7 +676,7 @@ class _WeatherHomeState extends State<WeatherHome> {
     final hours = _forecastData?['forecast']?['forecastday']?[0]?['hour'] ?? [];
     if (hours.isEmpty) return null;
 
-    final now = DateTime.now();
+    final now = _localTime ?? DateTime.now();
     final target = now.add(const Duration(hours: 3));
     Map<String, dynamic>? futureHour;
     for (final hour in hours) {
