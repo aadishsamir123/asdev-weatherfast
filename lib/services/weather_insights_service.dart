@@ -127,7 +127,11 @@ class WeatherInsightsService {
         : dailyForecasts;
     final last3Avg = _averageTemp(last3);
 
-    final direction = last3Avg > first3Avg ? 'warming' : 'cooling';
+    final direction = last3Avg > first3Avg
+        ? 'warming'
+        : last3Avg < first3Avg
+            ? 'cooling'
+            : 'stable';
     final intensity = (last3Avg - first3Avg).abs() / 20;
 
     return {
