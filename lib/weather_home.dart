@@ -38,7 +38,7 @@ class _WeatherHomeState extends State<WeatherHome> {
         _forecastData = GlobalData.preloadedForecastData;
         _currentLocation = _weatherData?['location']?['name'];
         _localTime =
-            DateTime.parse(_weatherData?['location']?['localtime'] ?? '');
+            DateTime.tryParse(_weatherData?['location']?['localtime'] ?? '');
         _isDaytime = _weatherData?['current']?['is_day'] == 1;
       });
       GlobalData.hasPreloaded = false;
