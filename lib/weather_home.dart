@@ -461,7 +461,7 @@ class _WeatherHomeState extends State<WeatherHome> {
     final items = [
       _MetricTile(
         label: 'Feels like',
-        value: '${current['temp_c']?.round() ?? '--'}°',
+        value: '${current['feelslike_c']?.round() ?? '--'}°',
         icon: Icons.thermostat,
       ),
       _MetricTile(
