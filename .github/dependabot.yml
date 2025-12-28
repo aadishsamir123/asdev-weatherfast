@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Enable version updates for Dart/Flutter dependencies
+  - package-ecosystem: "pub"
+    directory: "/"
+    open-pull-requests-limit: 5
+    pull-request-branch-name:
+      separator: "/"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+    rebase-strategy: "auto"
+    allow:
+      - dependency-type: "all"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    pull-request-branch-name:
+      separator: "/"
+    commit-message:
+      prefix: "ci(actions)"
+      include: "scope"
+    rebase-strategy: "auto"
