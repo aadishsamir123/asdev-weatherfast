@@ -7,11 +7,10 @@ class WebViewScreen extends StatefulWidget {
   const WebViewScreen({super.key, required this.url});
 
   @override
-  _WebViewScreenState createState() => _WebViewScreenState();
+  State<WebViewScreen> createState() => _WebViewScreenState();
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  InAppWebViewController? _webViewController;
   String pageTitle = "Loading..."; // Default title while loading
 
   @override
@@ -26,9 +25,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       ),
       body: InAppWebView(
         initialUrlRequest: URLRequest(url: WebUri(widget.url)),
-        onWebViewCreated: (controller) {
-          _webViewController = controller;
-        },
         onLoadStop: (controller, url) async {
           _updateTitle(controller);
         },
