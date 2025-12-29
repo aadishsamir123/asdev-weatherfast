@@ -16,7 +16,7 @@ dependencies:
   flutter_typeahead: ^5.2.0
   geolocator: ^14.0.2
   permission_handler: ^11.1.0
-  intl: ^0.17.0
+  intl: ^0.20.2
   package_info_plus: ^8.1.2
   timezone: ^0.10.1
   flutter_inappwebview: ^6.1.5
