@@ -44,6 +44,14 @@ class WeatherService {
                       9 /
                       5) +
                   32,
+          'feelslike_c': (weatherData['current']['apparent_temperature'] as num)
+              .toDouble(),
+          'feelslike_f':
+              ((weatherData['current']['apparent_temperature'] as num)
+                          .toDouble() *
+                      9 /
+                      5) +
+                  32,
           'condition': {
             'text': _getWeatherDescription(
                 (weatherData['current']['weather_code'] as num).toInt()),
@@ -150,7 +158,9 @@ class WeatherService {
       // Extract hourly data
       final hourlyTimes = hourly['time'] as List;
       final hourlyTemps = hourly['temperature_2m'] as List;
+      final hourlyFeelsLike = hourly['apparent_temperature'] as List;
       final hourlyWeatherCodes = hourly['weather_code'] as List;
+      final hourlyPrecipProb = hourly['precipitation_probability'] as List;
 
       for (int i = 0; i < dates.length && i < 14; i++) {
         final maxTemp = (maxTemps[i] as num).toDouble();
@@ -169,6 +179,11 @@ class WeatherService {
               'time': hourTimeStr,
               'temp_c': (hourlyTemps[h] as num).toDouble(),
               'temp_f': ((hourlyTemps[h] as num).toDouble() * 9 / 5) + 32,
+              'feelslike_c': (hourlyFeelsLike[h] as num).toDouble(),
+              'feelslike_f':
+                  ((hourlyFeelsLike[h] as num).toDouble() * 9 / 5) + 32,
+              'chance_of_rain': (hourlyPrecipProb[h] as num?)?.toInt() ?? 0,
+              'chance_of_snow': 0,
               'condition': {
                 'text': _getWeatherDescription(
                     (hourlyWeatherCodes[h] as num).toInt()),
@@ -214,6 +229,14 @@ class WeatherService {
               (weatherData['current']['temperature_2m'] as num).toDouble(),
           'temp_f':
               ((weatherData['current']['temperature_2m'] as num).toDouble() *
+                      9 /
+                      5) +
+                  32,
+          'feelslike_c': (weatherData['current']['apparent_temperature'] as num)
+              .toDouble(),
+          'feelslike_f':
+              ((weatherData['current']['apparent_temperature'] as num)
+                          .toDouble() *
                       9 /
                       5) +
                   32,
@@ -393,8 +416,8 @@ class WeatherService {
   /// Fetch weather data from Open-Meteo API
   Future<Map<String, dynamic>> _fetchWeatherData(double lat, double lon) async {
     final url = Uri.parse('$_weatherUrl?latitude=$lat&longitude=$lon'
-        '&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl,visibility'
-        '&hourly=temperature_2m,weather_code,visibility'
+        '&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl,visibility'
+        '&hourly=temperature_2m,apparent_temperature,weather_code,visibility,precipitation_probability'
         '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
         '&timezone=auto'
         '&forecast_days=14');

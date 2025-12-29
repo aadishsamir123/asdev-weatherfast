@@ -28,6 +28,8 @@ class _WeatherHomeState extends State<WeatherHome> {
   DateTime? _localTime;
   bool? _isDaytime;
   bool _isRefreshing = false;
+  final Set<String> _expandedDays = {};
+  bool _hasInitializedExpandedDays = false;
 
   @override
   void initState() {
@@ -508,20 +510,92 @@ class _WeatherHomeState extends State<WeatherHome> {
   }
 
   Widget _buildHourlyStrip() {
-    final hours = _forecastData?['forecast']?['forecastday']?[0]?['hour'] ?? [];
-    if (hours.isEmpty) return const SizedBox.shrink();
+    final forecastDays =
+        _forecastData?['forecast']?['forecastday'] as List? ?? [];
+    if (forecastDays.isEmpty) return const SizedBox.shrink();
 
     final locationTime =
         DateTime.tryParse(_weatherData?['location']?['localtime'] ?? '') ??
             DateTime.now();
+    final now = DateTime.now();
 
-    final futureHours = hours
-        .where((hour) {
-          final hourTime = DateTime.parse(hour['time']);
-          return hourTime.isAfter(locationTime);
-        })
-        .take(12)
-        .toList();
+    // Group hourly data by day
+    final Map<String, List<Map<String, dynamic>>> hoursByDay = {};
+    for (var day in forecastDays) {
+      final hours = day['hour'] as List? ?? [];
+      for (var hour in hours) {
+        final hourTime = DateTime.parse(hour['time']);
+        if (hourTime.isAfter(locationTime)) {
+          final dateKey =
+              '${hourTime.year}-${hourTime.month.toString().padLeft(2, '0')}-${hourTime.day.toString().padLeft(2, '0')}';
+          hoursByDay.putIfAbsent(dateKey, () => []);
+          hoursByDay[dateKey]!.add({
+            'time': hourTime,
+            'data': hour,
+          });
+        }
+      }
+    }
+
+    if (hoursByDay.isEmpty) return const SizedBox.shrink();
+
+    // Initialize expanded days (today and tomorrow by default) - only once
+    if (!_hasInitializedExpandedDays) {
+      final today =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final tomorrow = now.add(const Duration(days: 1));
+      final tomorrowKey =
+          '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
+      _expandedDays.addAll([today, tomorrowKey]);
+      _hasInitializedExpandedDays = true;
+    }
+
+    // Build horizontal list items
+    final List<Widget> horizontalItems = [];
+    for (var entry in hoursByDay.entries) {
+      final dateKey = entry.key;
+      final hours = entry.value;
+      final firstHour = hours.first['time'] as DateTime;
+      final isExpanded = _expandedDays.contains(dateKey);
+
+      // Add date header with toggle
+      horizontalItems.add(
+        _CollapsibleDateHeader(
+          date: firstHour,
+          isExpanded: isExpanded,
+          onTap: () {
+            setState(() {
+              if (isExpanded) {
+                _expandedDays.remove(dateKey);
+              } else {
+                _expandedDays.add(dateKey);
+              }
+            });
+          },
+        ),
+      );
+
+      // Add hourly items if expanded
+      if (isExpanded) {
+        for (var hourEntry in hours) {
+          final hourTime = hourEntry['time'] as DateTime;
+          final hourData = hourEntry['data'];
+          final temp = hourData['temp_c'];
+          final condition = hourData['condition']['text'] as String;
+          final precip =
+              hourData['chance_of_rain'] ?? hourData['chance_of_snow'] ?? 0;
+
+          horizontalItems.add(
+            _ForecastChip(
+              label: DateFormat('h a').format(hourTime),
+              value: '${temp.round()}°',
+              icon: _iconForCondition(condition),
+              caption: '$precip% precip',
+            ),
+          );
+        }
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.only(top: 20),
@@ -535,36 +609,24 @@ class _WeatherHomeState extends State<WeatherHome> {
                 Icon(Icons.access_time,
                     color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
-                Text('Next hours',
+                Text('Hourly Forecast',
                     style: Theme.of(context).textTheme.titleMedium),
               ],
             ),
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 140,
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: futureHours.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final hourData = futureHours[index];
-                final time =
-                    DateFormat('h a').format(DateTime.parse(hourData['time']));
-                final temp = hourData['temp_c'];
-                final condition = hourData['condition']['text'] as String;
-                final precip = hourData['chance_of_rain'] ??
-                    hourData['chance_of_snow'] ??
-                    '--';
-
-                return _ForecastChip(
-                  label: time,
-                  value: '${temp.round()}°',
-                  icon: _iconForCondition(condition),
-                  caption: '$precip% precip',
-                );
-              },
+            height: 160,
+            child: Stack(
+              children: [
+                ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: horizontalItems.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) => horizontalItems[index],
+                ),
+              ],
             ),
           ),
         ],
@@ -720,6 +782,81 @@ class _WeatherHomeState extends State<WeatherHome> {
       return Icons.water_rounded;
     }
     return Icons.wb_sunny_rounded;
+  }
+}
+
+class _CollapsibleDateHeader extends StatelessWidget {
+  const _CollapsibleDateHeader({
+    required this.date,
+    required this.isExpanded,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final bool isExpanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
+    final tomorrow = now.add(const Duration(days: 1));
+    final isTomorrow = date.year == tomorrow.year &&
+        date.month == tomorrow.month &&
+        date.day == tomorrow.day;
+
+    String dateLabel;
+    if (isToday) {
+      dateLabel = 'Today';
+    } else if (isTomorrow) {
+      dateLabel = 'Tomorrow';
+    } else {
+      dateLabel = DateFormat('EEE, MMM d').format(date);
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        color: scheme.primaryContainer,
+        child: SizedBox(
+          width: 120,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: scheme.onPrimary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  dateLabel,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: scheme.onPrimaryContainer,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
