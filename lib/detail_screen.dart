@@ -738,7 +738,7 @@ class _DetailScreenState extends State<DetailScreen>
 
     if (widget.location == null || widget.location!.isEmpty) {
       return Scaffold(
-        appBar: animatedAppBar(child: const Text('Weather Insg')),
+        appBar: animatedAppBar(child: const Text('Weather Insights')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
