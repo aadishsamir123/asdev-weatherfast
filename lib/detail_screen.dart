@@ -699,9 +699,46 @@ class _DetailScreenState extends State<DetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+
+    PreferredSizeWidget animatedAppBar({required Widget child}) {
+      return PreferredSize(
+        preferredSize: const Size.fromHeight(72),
+        child: Stack(
+          children: [
+            Container(
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.85)
+                        : Colors.white.withValues(alpha: 0.85),
+                    brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.25)
+                        : Colors.white.withValues(alpha: 0.25),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.6, 1.0],
+                ),
+              ),
+            ),
+            AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              titleSpacing: 16,
+              title: child,
+            ),
+          ],
+        ),
+      );
+    }
+
     if (widget.location == null || widget.location!.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Insights')),
+        appBar: animatedAppBar(child: const Text('Weather Insg')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -729,7 +766,7 @@ class _DetailScreenState extends State<DetailScreen>
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Insights')),
+        appBar: animatedAppBar(child: const Text('Insights')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -740,17 +777,16 @@ class _DetailScreenState extends State<DetailScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        titleSpacing: 16,
-        title: Column(
+      appBar: animatedAppBar(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 10), // Top spacing
             const Text('Weather Insights'),
             if (_locationName != null)
               Text(
                 _locationName!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
@@ -781,8 +817,6 @@ class _DetailScreenState extends State<DetailScreen>
                           parent: BouncingScrollPhysics(),
                         ),
                         slivers: [
-                          const SliverToBoxAdapter(child: SizedBox(height: 80)),
-
                           // AI Insights only - no duplicate home page content
                           SliverToBoxAdapter(child: _buildAIInsightsCard()),
                           SliverToBoxAdapter(child: _buildActivityCards()),

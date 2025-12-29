@@ -18,6 +18,7 @@ class WeatherHome extends StatefulWidget {
 }
 
 class _WeatherHomeState extends State<WeatherHome> {
+  OverlayEntry? _updatingOverlay;
   final _weatherService = WeatherService();
   final _timeService = TimeService();
   final TextEditingController _searchController = TextEditingController();
@@ -27,9 +28,46 @@ class _WeatherHomeState extends State<WeatherHome> {
   Map<String, dynamic>? _forecastData;
   DateTime? _localTime;
   bool? _isDaytime;
+  // ignore: unused_field
   bool _isRefreshing = false;
   final Set<String> _expandedDays = {};
   bool _hasInitializedExpandedDays = false;
+
+  void _showUpdatingOverlay() {
+    if (_updatingOverlay != null) return;
+    final overlay = Overlay.of(context);
+    _updatingOverlay = OverlayEntry(
+      builder: (context) => SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Material(
+              color: Colors.transparent,
+              child: Chip(
+                label: const Text('Updating weather…'),
+                avatar: const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .surface
+                    .withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(_updatingOverlay!);
+  }
+
+  void _removeUpdatingOverlay() {
+    _updatingOverlay?.remove();
+    _updatingOverlay = null;
+  }
 
   @override
   void initState() {
@@ -51,11 +89,13 @@ class _WeatherHomeState extends State<WeatherHome> {
 
   @override
   void dispose() {
+    _removeUpdatingOverlay();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchWeatherForCurrentLocation() async {
+    _showUpdatingOverlay();
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -82,6 +122,8 @@ class _WeatherHomeState extends State<WeatherHome> {
       await _fetchWeather(coords);
     } catch (e) {
       _showError('Unable to fetch location weather. Please try again.');
+    } finally {
+      _removeUpdatingOverlay();
     }
   }
 
@@ -101,6 +143,7 @@ class _WeatherHomeState extends State<WeatherHome> {
 
   Future<void> _fetchWeather(String location) async {
     if (!mounted) return;
+    _showUpdatingOverlay();
     setState(() => _isRefreshing = true);
 
     try {
@@ -133,6 +176,7 @@ class _WeatherHomeState extends State<WeatherHome> {
       if (mounted) _showError('Failed to load weather: $e');
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
+      _removeUpdatingOverlay();
     }
   }
 
@@ -219,40 +263,72 @@ class _WeatherHomeState extends State<WeatherHome> {
     final maxToday = today?['day']?['maxtemp_c'];
     final minToday = today?['day']?['mintemp_c'];
 
+    // AppBar fade animation
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        titleSpacing: 16,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(72),
+        child: Stack(
           children: [
-            Text(
-              _currentLocation ?? 'Loading location…',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            if (_localTime != null)
-              Text(
-                '${DateFormat('EEEE, MMM d').format(_localTime!)} • ${DateFormat('h:mm a').format(_localTime!)}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+            // Gradient background
+            Container(
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.85)
+                        : Colors.white.withValues(alpha: 0.85),
+                    Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black.withValues(alpha: 0.25)
+                        : Colors.white.withValues(alpha: 0.25),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.6, 1.0],
+                ),
               ),
+            ),
+            AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              titleSpacing: 16,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Text(
+                    _currentLocation ?? 'Loading location…',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (_localTime != null)
+                    Text(
+                      '${DateFormat('EEEE, MMM d').format(_localTime!)} • ${DateFormat('h:mm a').format(_localTime!)}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.search_rounded),
+                  tooltip: 'Search location',
+                  onPressed: _openSearchSheet,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.my_location_rounded),
+                  tooltip: 'Use current location',
+                  onPressed: _fetchWeatherForCurrentLocation,
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded),
-            tooltip: 'Search location',
-            onPressed: _openSearchSheet,
-          ),
-          IconButton(
-            icon: const Icon(Icons.my_location_rounded),
-            tooltip: 'Use current location',
-            onPressed: _fetchWeatherForCurrentLocation,
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: Stack(
         children: [
@@ -302,25 +378,6 @@ class _WeatherHomeState extends State<WeatherHome> {
               ),
             ),
           ),
-          if (_isRefreshing)
-            Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Chip(
-                  label: const Text('Updating weather…'),
-                  avatar: const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  backgroundColor: Theme.of(context)
-                      .colorScheme
-                      .surface
-                      .withValues(alpha: 0.9),
-                ),
-              ),
-            ),
         ],
       ),
     );

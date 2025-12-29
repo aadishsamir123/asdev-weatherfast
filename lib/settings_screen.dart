@@ -71,16 +71,13 @@ class SettingsScreen extends StatelessWidget {
                               color: colorScheme.onPrimaryContainer,
                             ),
                           ),
-                          title: const Text('App Info'),
+                          title: const Text('Open-Source Licenses'),
                           subtitle: FutureBuilder<PackageInfo>(
                             future: PackageInfo.fromPlatform(),
                             builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const Text('Loading...');
-                              }
                               return Text(
-                                'Version ${snapshot.data!.version} (${snapshot.data!.buildNumber})',
-                              );
+                                  "View licenses for open-source packages"
+                                  "${snapshot.hasData ? ' used in WeatherFast ${snapshot.data!.version}' : ''}.");
                             },
                           ),
                           trailing: const Icon(Icons.chevron_right_rounded),
@@ -172,7 +169,7 @@ class SettingsScreen extends StatelessWidget {
                               return const SizedBox.shrink();
                             }
                             return Text(
-                              'Version ${snapshot.data!.version}',
+                              'Version ${snapshot.data!.version} (${snapshot.data!.buildNumber})',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
