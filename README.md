@@ -1,4 +1,6 @@
 # WeatherFast
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FASDev-Official%2Fweatherfast.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FASDev-Official%2Fweatherfast?ref=badge_shield)
+
 
 Fast, focused weather app built with Flutter. Get instant conditions, intelligent insights, and a clean animated experience across Android, iOS, web, and desktop.
 
@@ -48,3 +50,6 @@ Issues and PRs are welcome. Please run `flutter analyze` and `flutter test` befo
 
 ## License
 This project is licensed under the MIT License. See `LICENSE` for details.
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FASDev-Official%2Fweatherfast.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FASDev-Official%2Fweatherfast?ref=badge_large)
