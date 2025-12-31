@@ -13,33 +13,8 @@ class SettingsScreen extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar.large(
-            expandedHeight: 200,
+            title: const Text('Settings'),
             pinned: true,
-            centerTitle: true,
-            flexibleSpace: FlexibleSpaceBar(
-              centerTitle: true,
-              title: const Text('Settings'),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colorScheme.primaryContainer,
-                      colorScheme.secondaryContainer,
-                    ],
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.settings_rounded,
-                    size: 80,
-                    color:
-                        colorScheme.onPrimaryContainer.withValues(alpha: 0.3),
-                  ),
-                ),
-              ),
-            ),
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -89,7 +64,6 @@ class SettingsScreen extends StatelessWidget {
                                   data: Theme.of(context),
                                   child: const LicensePage(
                                     applicationName: 'WeatherFast',
-                                    applicationIcon: FlutterLogo(size: 48),
                                   ),
                                 ),
                               ),
