@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'services/global_data.dart';
 import 'time_service.dart';
 import 'ui/animated_weather_backdrop.dart';
+import 'ui/scroll_indicator.dart';
 import 'weather_service.dart';
 
 class WeatherHome extends StatefulWidget {
@@ -22,6 +23,7 @@ class _WeatherHomeState extends State<WeatherHome> {
   final _weatherService = WeatherService();
   final _timeService = TimeService();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   String? _currentLocation;
   Map<String, dynamic>? _weatherData;
@@ -32,6 +34,8 @@ class _WeatherHomeState extends State<WeatherHome> {
   bool _isRefreshing = false;
   final Set<String> _expandedDays = {};
   bool _hasInitializedExpandedDays = false;
+  double _scrollOffset = 0.0;
+  bool _showScrollIndicator = true;
 
   void _showUpdatingOverlay() {
     if (_updatingOverlay != null) return;
@@ -51,10 +55,9 @@ class _WeatherHomeState extends State<WeatherHome> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                backgroundColor: Theme.of(context)
-                    .colorScheme
-                    .surface
-                    .withValues(alpha: 0.9),
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.9),
               ),
             ),
           ),
@@ -72,13 +75,16 @@ class _WeatherHomeState extends State<WeatherHome> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+
     if (GlobalData.hasPreloaded && GlobalData.preloadedWeatherData != null) {
       setState(() {
         _weatherData = GlobalData.preloadedWeatherData;
         _forecastData = GlobalData.preloadedForecastData;
         _currentLocation = _weatherData?['location']?['name'];
-        _localTime =
-            DateTime.tryParse(_weatherData?['location']?['localtime'] ?? '');
+        _localTime = DateTime.tryParse(
+          _weatherData?['location']?['localtime'] ?? '',
+        );
         _isDaytime = _weatherData?['current']?['is_day'] == 1;
       });
       GlobalData.hasPreloaded = false;
@@ -87,8 +93,16 @@ class _WeatherHomeState extends State<WeatherHome> {
     }
   }
 
+  void _onScroll() {
+    setState(() {
+      _scrollOffset = _scrollController.offset;
+      _showScrollIndicator = _scrollController.offset < 50;
+    });
+  }
+
   @override
   void dispose() {
+    _scrollController.dispose();
     _removeUpdatingOverlay();
     _searchController.dispose();
     super.dispose();
@@ -128,9 +142,9 @@ class _WeatherHomeState extends State<WeatherHome> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _onRefresh() async {
@@ -308,8 +322,8 @@ class _WeatherHomeState extends State<WeatherHome> {
                     Text(
                       '${DateFormat('EEEE, MMM d').format(_localTime!)} • ${DateFormat('h:mm a').format(_localTime!)}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                 ],
               ),
@@ -332,22 +346,32 @@ class _WeatherHomeState extends State<WeatherHome> {
       ),
       body: Stack(
         children: [
-          AnimatedWeatherBackdrop(
-            condition: condition,
-            isDaytime: isDaytime,
-            height: 360,
-            intensity: 0.65,
+          // Full-screen animated weather backdrop
+          Positioned.fill(
+            child: AnimatedWeatherBackdrop(
+              condition: condition,
+              isDaytime: isDaytime,
+              scrollOffset: _scrollOffset,
+              intensity: 0.65,
+            ),
           ),
+          // Content
           SafeArea(
             child: RefreshIndicator.adaptive(
               onRefresh: _onRefresh,
               displacement: 32,
               child: CustomScrollView(
+                controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(
                   parent: BouncingScrollPhysics(),
                 ),
                 slivers: [
-                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                  // Spacer to reveal the animated sky before the hero card
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.52,
+                    ),
+                  ),
                   SliverToBoxAdapter(
                     child: _weatherData == null
                         ? _buildLoadingCard()
@@ -356,23 +380,16 @@ class _WeatherHomeState extends State<WeatherHome> {
                             temp: temp,
                             high: maxToday,
                             low: minToday,
+                            showScrollArrow: _showScrollIndicator,
                           ),
                   ),
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverToBoxAdapter(
-                      child: _buildMetricsGrid(),
-                    ),
+                    sliver: SliverToBoxAdapter(child: _buildMetricsGrid()),
                   ),
-                  SliverToBoxAdapter(
-                    child: _buildHourlyStrip(),
-                  ),
-                  SliverToBoxAdapter(
-                    child: _buildDailyForecast(),
-                  ),
-                  SliverToBoxAdapter(
-                    child: _buildInsights(),
-                  ),
+                  SliverToBoxAdapter(child: _buildHourlyStrip()),
+                  SliverToBoxAdapter(child: _buildDailyForecast()),
+                  SliverToBoxAdapter(child: _buildInsights()),
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
                 ],
               ),
@@ -409,6 +426,7 @@ class _WeatherHomeState extends State<WeatherHome> {
     required dynamic temp,
     required dynamic high,
     required dynamic low,
+    bool showScrollArrow = false,
   }) {
     final scheme = Theme.of(context).colorScheme;
     final localDateTime = _localTime ?? DateTime.now();
@@ -443,11 +461,10 @@ class _WeatherHomeState extends State<WeatherHome> {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             Text(
-                              DateFormat('EEE, MMM d • h:mm a')
-                                  .format(localDateTime),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
+                              DateFormat(
+                                'EEE, MMM d • h:mm a',
+                              ).format(localDateTime),
+                              style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                             ),
                           ],
@@ -464,15 +481,13 @@ class _WeatherHomeState extends State<WeatherHome> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
                         temp != null ? '${temp.round()}°' : '--',
-                        style: Theme.of(context)
-                            .textTheme
-                            .displayMedium
+                        style: Theme.of(context).textTheme.displayMedium
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(width: 12),
@@ -484,9 +499,7 @@ class _WeatherHomeState extends State<WeatherHome> {
                               'H ${high != null ? high.round() : '--'}°  ·  L ${low != null ? low.round() : '--'}°',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(color: scheme.onSurfaceVariant),
                             ),
                             const SizedBox(height: 6),
@@ -494,9 +507,7 @@ class _WeatherHomeState extends State<WeatherHome> {
                               _insightForWeather(condition),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
+                              style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: scheme.primary),
                             ),
                           ],
@@ -504,6 +515,15 @@ class _WeatherHomeState extends State<WeatherHome> {
                       ),
                     ],
                   ),
+                  if (showScrollArrow) ...[
+                    const SizedBox(height: 16),
+                    Center(
+                      child: ScrollIndicator(
+                        visible: showScrollArrow,
+                        color: scheme.primary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -558,10 +578,12 @@ class _WeatherHomeState extends State<WeatherHome> {
       spacing: 12,
       runSpacing: 12,
       children: items
-          .map((item) => SizedBox(
-                width: (MediaQuery.of(context).size.width - 16 * 2 - 12) / 2,
-                child: item,
-              ))
+          .map(
+            (item) => SizedBox(
+              width: (MediaQuery.of(context).size.width - 16 * 2 - 12) / 2,
+              child: item,
+            ),
+          )
           .toList(),
     );
   }
@@ -573,7 +595,7 @@ class _WeatherHomeState extends State<WeatherHome> {
 
     final locationTime =
         DateTime.tryParse(_weatherData?['location']?['localtime'] ?? '') ??
-            DateTime.now();
+        DateTime.now();
     final now = DateTime.now();
 
     // Group hourly data by day
@@ -586,10 +608,7 @@ class _WeatherHomeState extends State<WeatherHome> {
           final dateKey =
               '${hourTime.year}-${hourTime.month.toString().padLeft(2, '0')}-${hourTime.day.toString().padLeft(2, '0')}';
           hoursByDay.putIfAbsent(dateKey, () => []);
-          hoursByDay[dateKey]!.add({
-            'time': hourTime,
-            'data': hour,
-          });
+          hoursByDay[dateKey]!.add({'time': hourTime, 'data': hour});
         }
       }
     }
@@ -663,11 +682,15 @@ class _WeatherHomeState extends State<WeatherHome> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Icon(Icons.access_time,
-                    color: Theme.of(context).colorScheme.primary),
+                Icon(
+                  Icons.access_time,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
-                Text('Hourly Forecast',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Hourly Forecast',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ],
             ),
           ),
@@ -704,11 +727,15 @@ class _WeatherHomeState extends State<WeatherHome> {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_month,
-                  color: Theme.of(context).colorScheme.primary),
+              Icon(
+                Icons.calendar_month,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(width: 8),
-              Text('Next 6 days',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Next 6 days',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -729,7 +756,7 @@ class _WeatherHomeState extends State<WeatherHome> {
                 subtitle: '$rain% precip',
               ),
             );
-          })
+          }),
         ],
       ),
     );
@@ -751,11 +778,15 @@ class _WeatherHomeState extends State<WeatherHome> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.lightbulb,
-                      color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    Icons.lightbulb,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Today’s suggestion',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Today’s suggestion',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -765,9 +796,10 @@ class _WeatherHomeState extends State<WeatherHome> {
                 Text(
                   futureAdvice,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ]
+              ],
             ],
           ),
         ),
@@ -860,7 +892,8 @@ class _CollapsibleDateHeader extends StatelessWidget {
     final isToday =
         date.year == now.year && date.month == now.month && date.day == now.day;
     final tomorrow = now.add(const Duration(days: 1));
-    final isTomorrow = date.year == tomorrow.year &&
+    final isTomorrow =
+        date.year == tomorrow.year &&
         date.month == tomorrow.month &&
         date.day == tomorrow.day;
 
@@ -903,9 +936,9 @@ class _CollapsibleDateHeader extends StatelessWidget {
                 Text(
                   dateLabel,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: scheme.onPrimaryContainer,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: scheme.onPrimaryContainer,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -954,10 +987,9 @@ class _MetricTile extends StatelessWidget {
                   Text(label, style: Theme.of(context).textTheme.bodyMedium),
                   Text(
                     value,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ),
@@ -1002,20 +1034,18 @@ class _ForecastChip extends StatelessWidget {
                   const SizedBox(width: 6),
                   Text(
                     value,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
                 caption,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -1051,10 +1081,9 @@ class _DailyTile extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: Text(
           '${hi != null ? hi.round() : '--'}° / ${lo != null ? lo.round() : '--'}°',
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
     );
